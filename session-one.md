@@ -343,5 +343,410 @@ Type `exit` to close your ssh connection.
 
 ## Certificate Authority and TLS Certificates
 
-TODO
+[*KTHW Link*](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md)
 
+By design, all traffic in and out of Kubernetes control plane services are encrypted with unique TLS certificates. Those services are: 
+
+* kube-api-server
+* kube-scheduler
+* kubelet
+* kube-proxy
+
+To create and manage all these keys and certificates, you'll use the Cloudflare PKI toolkit you installed in the [Prerequisites Lab](https://hackmd.io/6NFDYrWdQC677I-arkQWmg?both#Prerequisites) to bootstrap a certificate authority (CA) and generate the needed certificates. Once created, you'll distribute them to their proper cluster node.
+
+### Creating a Certificate Authority
+
+1. Create ca-config.json 
+
+    ```
+    cat > ca-config.json <<EOF
+    {
+      "signing": {
+        "default": {
+          "expiry": "8760h"
+        },
+        "profiles": {
+          "kubernetes": {
+            "usages": ["signing", "key encipherment", "server auth", "client auth"],
+            "expiry": "8760h"
+          }
+        }
+      }
+    }
+    EOF
+    ```
+
+2. Create ca-csr.json 
+
+    ```
+    cat > ca-csr.json <<EOF
+    {
+      "CN": "Kubernetes",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "CA",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+    
+3. Create your certificate authority
+
+    ```
+    cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+    ```
+    
+This creates `ca-key.pem` and `ca.pem`. This key and certificate combination will be used to sign the rest of the certificates you create for your cluster. They are your certificate authority.
+
+### Creating the admin client certificate
+
+Each kubernetes service needs a client and server certificate. Additionally, the default `admin` user needs a client certificate to be able to authenticate to the cluster's control plane.
+
+1. Create the Certificate Signing Request (CSR) file
+    ```
+    cat > admin-csr.json <<EOF
+    {
+      "CN": "admin",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:masters",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+
+2. Generate the signed key and certificate from the CSR file
+    ```
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      admin-csr.json | cfssljson -bare admin
+    ```
+
+#### Generated files 
+
+* `admin-key.pem`
+* `admin.pem`
+
+### Creating kubelet client certificates
+
+The `kubelet` service runs on each node in your cluster. Kubelet interfaces with the container runtime on each node and reports information back to the control plane. To authoritze a node to be part of a cluster, `kubelet` uses a credential for an [authentication mechanism](https://kubernetes.io/docs/admin/authorization/node/) that confirms they're part of the `system:nodes` group. 
+
+Each worker node needs a unique certificate that you'll create in this sexction. This certificate needs to reference both the internal and exteral IP addresses for each node. This will allow for all needed communications. The snippet below does the following for each node:
+
+* Creates a CSR file 
+* Captures the internal IP address as a variable
+* Captures the external IP addresses as a variable
+* Uses both IPs and the CSR to create a TLS certificate 
+    
+```
+for instance in worker-0 worker-1 worker-2; do
+cat > ${instance}-csr.json <<EOF
+{
+  "CN": "system:node:${instance}",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "system:nodes",
+      "OU": "Kubernetes The Hard Way",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+EXTERNAL_IP=$(gcloud compute instances describe ${instance} \
+  --format 'value(networkInterfaces[0].accessConfigs[0].natIP)')
+
+INTERNAL_IP=$(gcloud compute instances describe ${instance} \
+  --format 'value(networkInterfaces[0].networkIP)')
+
+cfssl gencert \
+  -ca=ca.pem \
+  -ca-key=ca-key.pem \
+  -config=ca-config.json \
+  -hostname=${instance},${EXTERNAL_IP},${INTERNAL_IP} \
+  -profile=kubernetes \
+  ${instance}-csr.json | cfssljson -bare ${instance}
+done
+```
+
+#### Generated files 
+
+* `worker-0-key.pem`
+* `worker-0.pem`
+* `worker-1-key.pem`
+* `worker-1.pem`
+* `worker-2-key.pem`
+* `worker-2.pem`
+
+### Creating the kube-controller-manager client certificate
+
+This certificate will be used by clients communicating with the `kube-controller-manager` service. 
+
+1. Generate the CSR file
+    ```
+    cat > kube-controller-manager-csr.json <<EOF
+    {
+      "CN": "system:kube-controller-manager",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:kube-controller-manager",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+    
+2. Generate the signed certificate and key file
+    ```
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
+
+    ```
+
+#### Generated files 
+
+* kube-controller-manager-key.pem
+* kube-controller-manager.pem
+
+### Creating the kube-proxy client certificate
+
+This certificate is used to communicate with the `kube-proxy` service.
+
+1. Generate the CSR file 
+    ```
+    cat > kube-proxy-csr.json <<EOF
+    {
+      "CN": "system:kube-proxy",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:node-proxier",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+    
+2. Generate the signed certificate and key file
+    ```
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      kube-proxy-csr.json | cfssljson -bare kube-proxy
+    ```
+    
+#### Generated files
+
+* kube-proxy-key.pem
+* kube-proxy.pem
+
+### Creating the kube-scheduler client certificates
+
+This certificate is used to communicate with the `kube-scheduler` control plane service. 
+
+1. Generate the CSR file 
+    ```
+    cat > kube-scheduler-csr.json <<EOF
+    {
+      "CN": "system:kube-scheduler",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:kube-scheduler",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+    
+2. Generate the signed certificate and key file
+    ```
+    cfssl gencert \
+     -ca=ca.pem \
+     -ca-key=ca-key.pem \
+     -config=ca-config.json \
+     -profile=kubernetes \
+     kube-scheduler-csr.json | cfssljson -bare kube-scheduler
+    ```
+
+#### Generated files 
+
+* kube-scheduler-key.pem
+* kube-scheduler.pem
+
+### Creating the kubernetes API server certificate
+
+To allow for valid access to your cluster, the kubernetes-the-hard-way static IP address will be included in the list of subject alternative names for the Kubernetes API Server certificate. This will make it a valid TLS certificate.
+
+1. Generate the CSR file 
+    ```
+    cat > kubernetes-csr.json <<EOF
+    {
+      "CN": "kubernetes",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+    
+2. Set the kubernetes-the-hard-way public IP address as a variable 
+    ```
+    KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
+      --region $(gcloud config get-value compute/region) \
+      --format 'value(address)')
+    ```
+    
+3. Set all of the valid internal hostnames for kubernetes to a variable. The Kubernetes API server is automatically assigned the kubernetes internal dns name, which will be linked to the first IP address (10.32.0.1) from the address range (10.32.0.0/24) reserved for internal cluster services during the control plane bootstrapping lab.
+    ```
+    KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
+    ```
+    
+4. Generate the signed certificates and key file
+    ```
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,${KUBERNETES_HOSTNAMES} \
+      -profile=kubernetes \
+      kubernetes-csr.json | cfssljson -bare kubernetes
+    ```
+    
+#### Generated files 
+
+* kubernetes-key.pem
+* kubernetes.pem
+
+### Creating the service account key pair
+
+The `kubernetes-controller-manager` service uses a key pair to generate and sign service account tokens as described in the [managing service accounts](https://kubernetes.io/docs/admin/service-accounts-admin/) documentation.
+
+1. Generate the service account CSR file
+    ```
+    cat > service-account-csr.json <<EOF
+    {
+      "CN": "service-accounts",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+    ```
+
+2. Generate the signed certificate and key file 
+    ```
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      service-account-csr.json | cfssljson -bare service-account
+    ```
+    
+#### Generated files 
+
+* service-account-key.pem
+* service-account.pem
+
+That is the last of the 9 certificates and key files you'll need in your kubernetes cluster. In the next section, you'll place them in the proper locations on the proper servers.
+
+### Distributing client and server certificates 
+
+1. Distribute the application node certificates and key files
+    ```
+    for instance in worker-0 worker-1 worker-2; do
+      gcloud compute scp ca.pem ${instance}-key.pem ${instance}.pem ${instance}:~/
+    done
+    ```
+
+2. Distribute the certificates and key files for control plane services. In the next lab you'll use these certificates to create client configuration files. 
+    ```
+    for instance in controller-0 controller-1 controller-2; do
+      gcloud compute scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
+      service-account-key.pem service-account.pem ${instance}:~/
+    done
+    ```
+
+## Wrap-Up
+
+It may feel a little odd to be talking about kubernetes so much while you haven't even downloaded the source code from Github yyout. Don't worry. You'll get there. Think about all of this prep work the next time you use a kube cluster. There's a massive amount of prep work that is normally automated during a kube install. 
+
+Hopefully this gives you a little more appreciation for that process, as well as a little better understanding of it. 
+
+If you have any questions, feel free to reach out to jduncan on the [kubernetes slack](https://kubernetes.slack.com/archives/DPXNHT65T) or [twitter](https://twitter.com/jamieeduncan). 
