@@ -8,9 +8,11 @@
 
 * Kubernetes The Hard Way - https://github.com/kelseyhightower/kubernetes-the-hard-way
 * GDoc (internal to Google) - [go/k8s-appreciation-month](go/k8s-appreciation-month)
-* self-link - https://hackmd.io/6NFDYrWdQC677I-arkQWmg
 * This project in Github - https://github.com/jduncan-rva/k8s-appreciation-month
-
+* Session One - https://hackmd.io/6NFDYrWdQC677I-arkQWmg
+* Session Two - https://hackmd.io/RIEmIlXpRouNlVKhBQ3Thw
+* Session Three - https://hackmd.io/xs65EKFhRi-PnEDwBdzSYQ
+* Session Four - https://hackmd.io/S62A412aQb2Q5pBsVsDqgg
 
 ## Weclome to Kubernetes Appreciation Month!
 
@@ -19,3 +21,9 @@ In our third livestream lab, we'll cover the following KTHW labs:
 * [Bootstrapping the Kubernetes Control Plane](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/08-bootstrapping-kubernetes-controllers.md)
 * [Bootstrapping the Kubernetes Worker Nodes](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/09-bootstrapping-kubernetes-workers.md)
 * [Configuring kubectl for Remote Access](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/10-configuring-kubectl.md)
+
+## Bootstrapping the Control Plane
+
+## Boostrapping the Application Nodes 
+
+## Configuring kubectl 
