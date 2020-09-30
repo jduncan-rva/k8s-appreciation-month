@@ -29,14 +29,20 @@ The goal of this session is to take the certificates and keys generated in the p
 
 *Note - these commands should be run in the same directory where you created the TLS certificates and key files.*
 
-### Getting the Kubernetes Public IP Address
+### Getting your Kubernetes Public IP Address
 
-Each kubeconfig you create needs to reference the IP address of the kubernetes API server. To make your control plan highly available, the IP address will be the public IP address you created earlier. You'll retrieve this value using the `gcloud` SDK.
+Each kubeconfig you create needs to reference the IP address of the kubernetes API server. To make your control plane highly available, the IP address will be the public IP address you created earlier. You'll retrieve this value using the `gcloud` SDK.
 
 ```
 KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
   --region $(gcloud config get-value compute/region) \
   --format 'value(address)')
+```
+
+To verify this worked, check the value of the variable.
+
+```
+echo $KUBERNETES_PUBLIC_ADDRESS
 ```
 
 ### kubelet
@@ -243,7 +249,33 @@ All of these commands must be run on all three control plane nodes. Your `ssh` k
 gcloud compute ssh controller-0
 ```
 
-`tmux` can be used to run commands in parrallel over `ssh`. It's configured using the [KTHW Prerequisites lab](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/01-prerequisites.md#running-commands-in-parallel-with-tmux).
+### Setting up tmux
+
+`tmux` is an effective tool to, among other things, execute the same command on multiple servers in parrallel. It'll save you a lot of time and prevent a lot of typos during the rest of this lab. Your environment my vary a little, but the general steps should be the same. If you choose to use another method to handle multiple servers, ignore this section. If you're using [GCP Cloud Shell](https://cloud.google.com/shell) to deploy this lab, `tmux` is already installed. 
+
+#### Open up three tmux panes 
+
+1. The hot key for `tmux` is typically `ctrl-b`. To open up a new tab in `tmux`, hit `ctrl-b` followed by the double-quote key. This will open up a new pane. Do this twice to open up a total of 3 panes. 
+2. At this point you have 3 panes open, but they're not evenly spaced. That's just annoying. Hit `ctrl-b` again, followed by `:select-layout even-vertical` and hit `Enter`. 
+
+You should now have 3 nice evenly spaced panes.
+
+#### Connect to your control plane nodes 
+
+To move between panes to make the initial connections, use `ctrl-b` and the up/down errors. 
+1. If you're using Cloud Shell, you will have to run `gcloud init` in each `tmux` pane to connect back to your account.
+2. With this done, connect to one of your control plane nodes in each pane. For example: 
+    ```
+    gcloud compute ssh controller-0
+    ```
+
+Once you're connected to all 3 control plane nodes, you can synchronize your panes to type in all of them simultaneously.
+
+#### Synchronizing your tmux panes 
+
+1. Hit `ctrl-b` on your keyboard, followed by `:setw synchronize-panes on`.
+
+This will synchronize the 3 `tmux` panes to enter the same commands across all 3 control plane nodes simultaneously. Next, you'll bootstrap your `etcd` cluster.
 
 ### Configuring each cluster
 
@@ -314,9 +346,9 @@ gcloud compute ssh controller-0
     
 7. Start the `etcd` service 
     ```
-      sudo systemctl daemon-reload
-      sudo systemctl enable etcd
-      sudo systemctl start etcd
+    sudo systemctl daemon-reload
+    sudo systemctl enable etcd
+    sudo systemctl start etcd
     ```
     
 8. Verify `etcd` is running properly
