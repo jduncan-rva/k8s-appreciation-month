@@ -37,6 +37,8 @@ In our first session we'll be covering these labs from [Kubernetes The Hard Way]
 
     `gcloud init`
     
+    If you're setting up a new account for the first time you'll be given the option to select a default zone and region after you log in. If you do that as part of this command, you can skip doing it in steps 3-5. 
+    
 3. Once you're account is set up, run `gcloud auth login` to make sure you're logged in as the proper user.
 
     `gcloud auth login`
@@ -82,14 +84,21 @@ Download and install `cfssl` and `cfssljson`:
 
 #### OS X
 
-```
-curl -o cfssl https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/darwin/cfssl
-curl -o cfssljson https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/darwin/cfssljson
+1. Download the OSX binaries
+    ```
+    curl -o cfssl https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/darwin/cfssl
+    curl -o cfssljson https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/darwin/cfssljson
+    ```
 
-chmod +x cfssl cfssljson
+2. Make the downloaded files executable
+    ```
+    chmod +x cfssl cfssljson
+    ```
 
-sudo mv cfssl cfssljson /usr/local/bin/
-```
+3. Move the files to a directory in $PATH
+    ```
+    sudo mv cfssl cfssljson /usr/local/bin/
+    ```
 
 Some OS X users may experience problems using the pre-built binaries in which case [Homebrew](https://brew.sh) might be a better option:
 
@@ -99,30 +108,69 @@ brew install cfssl
 
 #### Linux
 
-```
-wget -q --show-progress --https-only --timestamping \
-  https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssl \
-  https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssljson
-  
-chmod +x cfssl cfssljson
+1. Download the Linux binaries
 
-sudo mv cfssl cfssljson /usr/local/bin/
-```
+    ```
+    wget -q --show-progress --https-only --timestamping \
+      https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssl \
+      https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssljson
+    ```
+
+2. Make the Linux binaries executable
+    ```
+    chmod +x cfssl cfssljson
+    ```
+
+3. Move the files to a directory in $PATH
+    ```
+    sudo mv cfssl cfssljson /usr/local/bin/
+    ```
+    
+#### GCP Cloud Shell
+
+If you're using a GCP Cloud Shell instance for this lab, a small change to the Linux steps above will make your life easier. Steps 1 and 2 remain the same. But instead of step 3, run the following:
+
+1. Create a `bin` directory in your `$HOME` directory
+    ```
+    mkdir $HOME/bin
+    ```
+    
+2. Add your new directory to your `$PATH` variable.
+    ```
+    export PATH=$PATH:$HOME/bin
+    ```
+    
+    to have this persist across Cloud Shell restarts, you'll need to add this command to your `~/.bashrc` or other shell `.rc` file. That is a simple task, but out of scope for this workshop.
+    
+3. Move `cfssl` and `cfssljson` to `$HOME/bin`
+    ```
+    mv cfssl cfssljson $HOME/bin/
+    ```
+    
+You're now ready to move on to the next section and verify the functionality of your new tools.
 
 #### Verifying cfssl and cfssljson
 
 To verify `cfssl` and `cfssljson` version 1.4.1 or higher is installed.
 
+command:
 ```
 cfssl version
+```
 
+output:
+```
 Version: 1.4.1
 Runtime: go1.12.12
 ```
 
+command:
 ```
 cfssljson --version
+```
 
+output:
+```
 Version: 1.4.1
 Runtime: go1.12.12
 ```
@@ -131,27 +179,40 @@ Runtime: go1.12.12
 
 *This is taken almost verbatim from the KTHW lab link*
 
-The `kubectl` command line utility is used to interact with the Kubernetes API Server. Download and install `kubectl` from the official release binaries:
+The `kubectl` command line utility is used to interact with the Kubernetes API Server. If you're using a Cloud Shell instance, `kubectl` is already installed. For other systems, download and install `kubectl` from the official release binaries:
 
 #### OS X
 
-```
-curl -o kubectl https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/darwin/amd64/kubectl
+1. Download the kubectl OSX binary
+    ```
+    curl -o kubectl https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/darwin/amd64/kubectl
+    ```
 
-chmod +x kubectl
+2. Make `kubectl` executable
+    ```
+    chmod +x kubectl
+    ```
 
-sudo mv kubectl /usr/local/bin/
-```
+3. Move `kubectl` to a directory in your $PATH variable
+    ```
+    sudo mv kubectl /usr/local/bin/
+    ```
 
 #### Linux
+1. Download the Linux binary
+    ```
+    wget https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kubectl
+    ```
 
-```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kubectl
+2. Make the file excutable 
+    ```
+    chmod +x kubectl
+    ```
 
-chmod +x kubectl
-
-sudo mv kubectl /usr/local/bin/
-```
+3. Move `kubectl` into a directory in $PATH
+    ```
+    sudo mv kubectl /usr/local/bin/
+    ```
 
 #### Verification
 
@@ -159,7 +220,10 @@ Verify `kubectl` version 1.18.6 or higher is installed:
 
 ```
 kubectl version --client
+```
 
+sample output:
+```
 Client Version: version.Info{Major:"1", Minor:"18", GitVersion:"v1.18.6", GitCommit:"dff82dc0de47299ab66c83c626e08b245ab19037", GitTreeState:"clean", BuildDate:"2020-07-15T16:58:53Z", GoVersion:"go1.13.9", Compiler:"gc", Platform:"linux/amd64"}
 ```
 
@@ -188,7 +252,10 @@ To properly configure the VPC:
 1. Provision the VPC
     ```
     gcloud compute networks create kubernetes-the-hard-way --subnet-mode custom
+    ```
     
+    output:
+    ```
     Created [https://www.googleapis.com/compute/v1/projects/kthw-jduncan-dev/global/networks/kubernetes-the-hard-way].
     NAME                     SUBNET_MODE  BGP_ROUTING_MODE  IPV4_RANGE  GATEWAY_IPV4
     kubernetes-the-hard-way  CUSTOM       REGIONAL
@@ -207,7 +274,10 @@ To properly configure the VPC:
     gcloud compute networks subnets create kubernetes \
       --network kubernetes-the-hard-way \
       --range 10.240.0.0/24
-      
+    ```
+    
+    output:
+    ```
     Created [https://www.googleapis.com/compute/v1/projects/kthw-jduncan-dev/regions/us-east4/subnetworks/kubernetes].
     NAME        REGION    NETWORK                  RANGE
     kubernetes  us-east4  kubernetes-the-hard-way  10.240.0.0/24
@@ -222,7 +292,10 @@ To properly configure the VPC:
       --allow tcp,udp,icmp \
       --network kubernetes-the-hard-way \
       --source-ranges 10.240.0.0/24,10.200.0.0/16
-      
+    ```
+    
+    output:
+    ```
     Creating firewall...⠹Created [https://www.googleapis.com/compute/v1/projects/kthw-jduncan-dev/global/firewalls/kubernetes-the-hard-way-allow-internal].
     Creating firewall...done.
     NAME                                    NETWORK                  DIRECTION  PRIORITY  ALLOW         DENY  DISABLED
@@ -238,7 +311,10 @@ To properly configure the VPC:
       --allow tcp:22,tcp:6443,icmp \
       --network kubernetes-the-hard-way \
       --source-ranges 0.0.0.0/0
-      
+    ```
+    
+    output:
+    ```
     Creating firewall...⠹Created [https://www.googleapis.com/compute/v1/projects/kthw-jduncan-dev/global/firewalls/kubernetes-the-hard-way-allow-external].
     Creating firewall...done.
     NAME                                    NETWORK                  DIRECTION  PRIORITY  ALLOW                 DENY  DISABLED
@@ -252,14 +328,20 @@ To properly configure the VPC:
     ```
     gcloud compute addresses create kubernetes-the-hard-way \
       --region $(gcloud config get-value compute/region)
-      
+    ```
+    
+    output:
+    ```
     Created [https://www.googleapis.com/compute/v1/projects/kthw-jduncan-dev/regions/us-east4/addresses/kubernetes-the-hard-way].
     ```
     
 6. Verify the firewall rules are in place.
     ```
     gcloud compute firewall-rules list --filter="network:kubernetes-the-hard-way"
-
+    ```
+    
+    output:
+    ```
     NAME                                    NETWORK                  DIRECTION  PRIORITY  ALLOW                 DENY  DISABLED
     kubernetes-the-hard-way-allow-external  kubernetes-the-hard-way  INGRESS    1000      tcp:22,tcp:6443,icmp        False
     kubernetes-the-hard-way-allow-internal  kubernetes-the-hard-way  INGRESS    1000      tcp,udp,icmp                False
@@ -268,7 +350,10 @@ To properly configure the VPC:
 7. Verify the Static IP address has been allocated.
     ```
     gcloud compute addresses list --filter="name=('kubernetes-the-hard-way')"
-
+    ```
+    
+    output:
+    ```
     NAME                     ADDRESS/RANGE   TYPE      PURPOSE  NETWORK  REGION    SUBNET  STATUS
     kubernetes-the-hard-way  XX.XXX.XXX.XXX  EXTERNAL                    us-east4          RESERVED
     ```
@@ -352,7 +437,10 @@ Each node will be configured with a static internal IP address to make the kuber
 
     ```
     gcloud compute instances list --filter="tags.items=kubernetes-the-hard-way"
-
+    ```
+    
+    output:
+    ```
     NAME          ZONE        MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP    STATUS
     controller-0  us-east4-a  e2-standard-2               10.240.0.10  35.245.213.69  RUNNING
     controller-1  us-east4-a  e2-standard-2               10.240.0.11  34.86.61.230   RUNNING
@@ -368,7 +456,10 @@ You'll use SSH to continue configuring your cluster from here. The `gcloud` util
 1. Connect to controller-0 via ssh
     ```
     gcloud compute ssh controller-0
-
+    ```
+    
+    output:
+    ```
     WARNING: The public SSH key file for gcloud does not exist.
     WARNING: The private SSH key file for gcloud does not exist.
     WARNING: You do not have an SSH key for gcloud.
@@ -957,3 +1048,5 @@ It may feel a little odd to be talking about kubernetes so much while you haven'
 Hopefully this gives you a little more appreciation for that process, as well as a little better understanding of it. 
 
 If you have any questions, feel free to reach out to jduncan on the [kubernetes slack](https://kubernetes.slack.com/archives/DPXNHT65T) or [twitter](https://twitter.com/jamieeduncan). 
+
+**Next up in the series is Session Two - https://hackmd.io/RIEmIlXpRouNlVKhBQ3Thw**
